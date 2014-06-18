@@ -36,7 +36,7 @@ $current=""
 $connected=false
 $openvpn_pid=0
 $original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
-$auth="rau22////Regis222;"
+$auth=""
 if $auth.size>0 
   puts "*************** Auth in code !!!! ************************"
 end
