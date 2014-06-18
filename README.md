@@ -38,4 +38,14 @@ Install openvpn, ruby, and some ruby extentions :
     > sudo ruby hma.rb &
 ```
 
+Inspirations
+============
+
+Rewriting shellscript from hma which establish a connection, in ruby
+
+GUI: minium functional :)
+
+
+
+
  
