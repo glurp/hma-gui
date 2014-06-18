@@ -1,3 +1,5 @@
+#!/usr/bin/ruby
+# encoding: utf-8
 #######################################################################
 #   hma.rb : GUI for manage VPN connection do hma network
 #  Usage:
@@ -34,7 +36,10 @@ $current=""
 $connected=false
 $openvpn_pid=0
 $original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
-$auth=""
+$auth="rau22////Regis222;"
+if $auth.size>0 
+  puts "*************** Auth in code !!!! ************************"
+end
 
 def check_system(with_connection)
   return unless with_connection
@@ -48,7 +53,7 @@ def check_system(with_connection)
 end
 
 def get_list_server()
-  gui_invoke { @lprovider.clear ; @lprovider.add_item("get from hma...") }
+  gui_invoke { @lprovider.clear ; @lprovider.add_item("get server list from hma...") }
 	open("https://securenetconnection.com/vpnconfig/servers-cli.php") do |body|
     $provider={}
 		list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
@@ -97,6 +102,7 @@ def connect
   ip=props[:ip]
   proto= props[:tcp]=="TCP" ? "tcp" : "udp"
   port =  (proto == "tcp") ? 443 :  53  
+  flog="/tmp/openvpn_hma.log"
   log "proto #{proto}"
   log "ip  #{ip}"
   log "serveur  #{$current}"
@@ -105,47 +111,81 @@ def connect
   template=open(tpl_uri).read.split(/\r?\n/)
   template <<  "remote #{ip} #{port}" 
   template <<  "proto #{proto}" 
+  template <<  "log-append #{flog}" 
   template <<  "" 
 
   log "create .cfg file (#{template.size} lines)"
   File.write("/tmp/hma-config.cfg",template.join("\n"))
   log "run openvpn..."
-  openvpn($current,"/tmp/hma-config.cfg")
+  openvpn($current,"/tmp/hma-config.cfg",flog)
  end
 
- def openvpn(name,cfg)
+ def openvpn(name,cfg,flog)
   openvpn = "openvpn --script-security 3 --verb 3 --config #{cfg} 2>&1"
   rusername = %r[Enter Auth Username:]i
   rpassword = %r[Enter Auth Password:]i
-  rcompleted= %r[Initialization Sequence Completed]i
-  rfail     = %r[WARNING]i
+  rcompleted= %r[Initialization\s*Sequence\s*Completed]i
+  rfail     = %r[ERROR:]i
   log "spawn > #{openvpn} ..." 
+  th=tailmf(flog,rcompleted,rfail)
   PTY.spawn(openvpn) do |read,write,pid|
     begin
+      $openvpn_pid=pid
+      th0=nil
       read.expect(rusername) { log "set user..."    ; write.puts $auth.split("////")[0] }
-      read.expect(rpassword) { log "set passwd..." ; write.puts $auth.split("////")[1] }
+      read.expect(rpassword) { log "set passwd..."  ; write.puts $auth.split("////")[1] }
       read.expect(rfail) { 
-        log "NOK!!!!"
-        $auth=""
-        Process.kill(9,pid)
+        log "NOK ???"
+        #$auth=""
+        th0=thread { sleep 20 ; log "kill openvpn.."; Process.kill(9,pid) rescue nil }
       }
-      read.expect(rcompleted) { 
-        log "OK!!!!"
+      read.expect(rcompleted,60) { 
+        log "OK!!!!"  #seem no work on some platforme....
+        th0.kill if th0
 	      gui_invoke {
-          $openvpn_pid=pid
           status_connection(true)
 					@ltitle.text=name
         } 
        }
-      read.each { |output| log "log:    "+output.chomp }
+      read.each { |output| p output; log "log:    "+output.chomp }
     rescue Exception => e
       Process.kill(9,pid)
       log "openvpn Exception #{e} #{"  "+e.backtrace.join("\n  ")}"
+    ensure
+      th.kill rescue nil
     end
   end 
+  $openvpn_pid=0
 end
 
-at_exit { Process.kill(9,$openvpn_pid) if $connected }
+def tailmf(filename,rok,rnok) 
+  Thread.new(filename) do |fn|
+     sleep(0.1) until File.exists?(fn)
+     size=( File.size(fn) rescue 0)
+     loop {
+       File.open(fn) do |ff|
+          ff.seek(size) if size>0 && size<=File.size(fn)
+          while line=ff.gets
+             size=ff.tell
+             log(line.chomp.split(/\s+/,6)[-1]) 
+             case line
+               when rok
+                 log "OK !!!!"
+	               gui_invoke {
+                   status_connection(true)
+					         @ltitle.text=name
+                 } 
+               when rnok
+                 log "AÏAÏAÏ!!!!"
+             end              
+             sleep 0.07
+          end
+          #log "#{fn} closed"
+       end
+       sleep 0.2
+     }
+  end
+end
 
 def log(*s)  
   p s
@@ -153,13 +193,17 @@ def log(*s)
 end
 
 def disconnect
-  return unless $connected
-  Process.kill(9,$openvpn_pid) 
+  return unless $openvpn_pid>0
+
+  Process.kill(9,$openvpn_pid) rescue nil
+  $openvpn_pid=0
 	gui_invoke {
     @ltitle.text="VPN Connection Manager"
     status_connection(false)
   } 
 end
+
+at_exit { (Process.kill(9,$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
 
 Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
   rposition(10,10)
@@ -173,8 +217,9 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        buttoni("Check vpn") { check_system(true) }
        buttoni("Refresh list") { Thread.new { get_list_server() } }
        buttoni("Disconnect...") { disconnect() }
+       buttoni("Forget name&pass") { $auth="" }
        bourrage
-       buttoni("Exit") { exit(0) }
+       buttoni("Exit") { exit(0) rescue nil }
      end
      separator
      stack do
