@@ -35,15 +35,40 @@ $provider={}
 $current=""
 $connected=false
 $openvpn_pid=0
-$original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
+$style_ok= <<EOF
+* { background-image:  -gtk-gradient(linear, left top, left bottom,  from(#066), to(#ACC));
+    color: #FFFFFF;
+}
+GtkEntry,GtkTreeView { background-image:  -gtk-gradient(linear, left top, left bottom,  
+      from(#FFE), to(#EED));
+    color: #000;
+}
+EOF
+$style_nok= <<EOF
+* { background-image:  -gtk-gradient(linear, left top, left bottom,  from(#966), to(#FCC));
+    color: #FFFFFF;
+}
+GtkEntry,GtkTreeView { background-image:  -gtk-gradient(linear, left top, left bottom,  
+      from(#FFE), to(#EED));
+    color: #000;
+}
+GtkButton, GtkButton > GtkLabel { background-image:  -gtk-gradient(linear, left top, left bottom,  
+      from(#EFE), to(#DED));
+    color: #000;
+}
+EOF
+
+
+
 $auth=""
 if $auth.size>0 
   puts "*************** Auth in code !!!! ************************"
 end
 
+
 def check_system(with_connection)
   return unless with_connection
-  vip=open("http://geoip.hidemyass.com/ip").read.chomp # truble: no hma ip is not detected...
+  vip=open("http://geoip.hidemyass.com/ip").read.chomp # truble: ip from hma is not detected with pen-uri...
   if vip!=$original_ip
     gui_invoke { alert("Virtual connection ok, ip=#{vip}") }
   else
@@ -54,17 +79,23 @@ end
 
 def get_list_server()
   gui_invoke { @lprovider.clear ; @lprovider.add_item("get server list from hma...") }
-	open("https://securenetconnection.com/vpnconfig/servers-cli.php") do |body|
-    $provider={}
-		list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
-      ip,name,co,tcp,udp=line.chomp.split('|')
-      $provider[name]={ip: ip,tcp: tcp,udp: udp}
-      name
-    }
-		gui_invoke {
-			@lprovider.clear
-			list.sort.each { |item| @lprovider.add_item(item) ; update}
-		}
+  iplist="https://securenetconnection.com/vpnconfig/servers-cli.php"
+  begin
+	  open(iplist) do |body|
+      gui_invoke { @lprovider.add_item("server reached...") }
+      $provider={}
+		  list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
+        ip,name,co,tcp,udp=line.chomp.split('|')
+        $provider[name]={ip: ip,tcp: tcp,udp: udp}
+        name
+      }
+		  gui_invoke {
+			  @lprovider.clear
+			  list.sort.each_with_index { |item,i| @lprovider.add_item(item) ; update if i%10==1}
+		  }
+    end
+  rescue Exception => e
+		  gui_invoke { error("Error getting HMA server list : #{e} \n on #{iplist}")}
   end
 end
 
@@ -121,11 +152,11 @@ def connect
  end
 
  def openvpn(name,cfg,flog)
-  openvpn = "openvpn --script-security 3 --verb 3 --config #{cfg} 2>&1"
+  openvpn = "openvpn --script-security 3 --verb 4 --config #{cfg} 2>&1"
   rusername = %r[Enter Auth Username:]i
   rpassword = %r[Enter Auth Password:]i
   rcompleted= %r[Initialization\s*Sequence\s*Completed]i
-  rfail     = %r[ERROR:]i
+  rfail     = %r[AUTH_FAILED]i
   log "spawn > #{openvpn} ..." 
   th=tailmf(flog,rcompleted,rfail)
   PTY.spawn(openvpn) do |read,write,pid|
@@ -137,18 +168,16 @@ def connect
       read.expect(rfail) { 
         log "NOK ???"
         #$auth=""
-        th0=thread { sleep 20 ; log "kill openvpn.."; Process.kill(9,pid) rescue nil }
+        log "kill openvpn.."; Process.kill(9,pid) rescue nil 
       }
-      read.expect(rcompleted,60) { 
-        log "OK!!!!"  #seem no work on some platforme....
+      read.expect(rcompleted,320) { #seem no work on some platform....
+        log "OK!!!!"  
         th0.kill if th0
-	      gui_invoke {
-          status_connection(true)
-					@ltitle.text=name
-        } 
+	      gui_invoke { status_connection(true) } 
        }
       read.each { |output| p output; log "log:    "+output.chomp }
     rescue Exception => e
+	    gui_invoke { status_connection(false) }
       Process.kill(9,pid)
       log "openvpn Exception #{e} #{"  "+e.backtrace.join("\n  ")}"
     ensure
@@ -158,6 +187,7 @@ def connect
   $openvpn_pid=0
 end
 
+# tail -f on openvpn log file
 def tailmf(filename,rok,rnok) 
   Thread.new(filename) do |fn|
      sleep(0.1) until File.exists?(fn)
@@ -177,6 +207,12 @@ def tailmf(filename,rok,rnok)
                  } 
                when rnok
                  log "AÏAÏAÏ!!!!"
+               when /Connection reset, restarting/i
+                 log "DECONNEXION !!!!"
+	               gui_invoke {
+                   status_connection(false)
+					         @ltitle.text="Disconnected"
+                 } 
              end              
              sleep 0.07
           end
@@ -188,7 +224,6 @@ def tailmf(filename,rok,rnok)
 end
 
 def log(*s)  
-  p s
   gui_invoke { log s.force_encoding("UTF-8") } 
 end
 
@@ -198,17 +233,19 @@ def disconnect
   Process.kill(9,$openvpn_pid) rescue nil
   $openvpn_pid=0
 	gui_invoke {
-    @ltitle.text="VPN Connection Manager"
     status_connection(false)
   } 
 end
 
 at_exit { (Process.kill(9,$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
 
+
 Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
   rposition(10,10)
   def status_connection(state)
     $connected=state
+    def_style state ? $style_ok : $style_nok 
+    @ltitle.text= state ? $current : "VPN Connection Manager"
     clear_append_to(@status) { label(state ? "#YES" : "#DIALOG_ERROR") } 
   end
   ############### HMI ###############
@@ -227,13 +264,13 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
           @ltitle=label("VPN Connection Manager",{
             font: "Arial bold 16",bg: "#004455", fg: "#AAAAAA"
 					})
-	 			  @status=stacki { labeli("") }
-          status_connection(false)
+	 			  @status=stacki { labeli("#DIALOG_ERROR") }
+	 			  $connected=false
        end
 			 separator
        stack do
          @lprovider=list("Providers:",200,200) { |item| 
-						@pvc.text=@lprovider.get_data[item.first]
+						@pvc.text=@lprovider.get_data[item.first] rescue nil
 				 }
          @lprovider.add_item("Loading...")
          flowi { 
@@ -243,10 +280,19 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        end
      end
   end
-  after 100 do
-    Thread.new { 
+  after(50) do
+    Thread.new {
+       begin
+         puts "get public ip..."
+         $original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
+         puts "public is ip=#{$original_ip}"
+         gui_invoke {alert("Public ip is #{$original_ip}") }
+       rescue 
+         $original_ip=""
+         gui_invoke {error("Internet seem unreachable !") }
+       end
       check_system(false) rescue nil
       get_list_server
     }
-  end
+  end  
 end
