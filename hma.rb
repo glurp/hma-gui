@@ -73,6 +73,9 @@ $auth=""
 if $auth.size>0 
   puts "*************** Auth in code !!!! ************************"
 end
+if File.exists?("client.cred")  
+  $auth=File.read("client.cred")
+end 
 
 ############################# Tools ##############################
 
@@ -123,6 +126,7 @@ def choose_provider(item)
         error("Error, redone...")
       }
       $auth=user+"////"+pass; user="";pass=""
+      File.write("client.cred",$auth) 
   end
 
   $current=item
@@ -211,7 +215,6 @@ def tailmf(filename,rok,rnok)
                  log "OK !!!!"
 	               gui_invoke {
                    status_connection(true)
-					         @ltitle.text=name
                  } 
                when rnok
                  log "AÏAÏAÏ!!!!"
@@ -219,7 +222,6 @@ def tailmf(filename,rok,rnok)
                  log "DECONNEXION !!!!"
 	               gui_invoke {
                    status_connection(false)
-					         @ltitle.text="Disconnected"
                  } 
              end              
              sleep 0.07
@@ -236,9 +238,11 @@ def log(*s)
 end
 
 def disconnect
-  return unless $openvpn_pid>0
-
-  Process.kill(9,$openvpn_pid) rescue nil
+  if $openvpn_pid>0
+    system("killall","openvpn")
+    return
+  end
+  Process.kill("INT",$openvpn_pid) rescue nil
   $openvpn_pid=0
 	gui_invoke {
     status_connection(false)
@@ -276,8 +280,11 @@ def speed_test()
   }
 end
 
-at_exit { (Process.kill(9,$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
+at_exit { (Process.kill("TERM",$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
 
+###########################################################################
+#               M A I N    W I N D O W
+###########################################################################
 
 Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
   rposition(10,10)
@@ -295,9 +302,9 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        buttoni("Disconnect...") { Thread.new { disconnect() } }
        buttoni("Change IP...") { reconnect() }
        buttoni("Speed Test...") { speed_test() }
-       buttoni("Forget name&pass") { $auth="" }
+       buttoni("Forget name&pass") { $auth=""; File.delete("client.cred") }
        bourrage
-       buttoni("Exit") { exit(0) rescue nil }
+       buttoni("Exit") { ruiby_exit()  }
      end
      separator
      stack do
