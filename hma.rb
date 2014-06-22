@@ -11,30 +11,39 @@
 #    > sudo ruby hma.rb &
 #######################################################################
 
+##################### Check machine envirronent #############" 
+if `which openvpn`.size==0
+   puts "Please, install 'openvpn' : > sudo apt-get install openvpn"
+   exit
+end
+if !Dir.exists?("/etc") && !Dir.exists?("/user")
+   puts "Please, run mme on i Unix/Bsd/Linux machine...."
+   exit
+end
+(puts "Must be root/sudo ! ";exit(1)) unless Process.uid==0 
+
+##################""" Load ruby gem dependancy #################
 def trequire(pack) 
    require pack
 rescue Exception  => e
    puts "Please, install '#{pack}' : > sudo gem install #{pack}"
    exit
 end
-if `which openvpn`.size==0
-   puts "Please, install 'openvpn' : > sudo apt-get install openvpn"
-   exit
-end
-(puts "Must be root/sudo ! ";exit(1)) unless Process.uid==0 
-
 
 require 'open-uri'
 require 'open3'
 trequire 'Ruiby'
 trequire 'pty'
 trequire 'expect'
+require_relative 'ip_speed_test.rb'
 
+################################ Global state ##################
 
 $provider={}
 $current=""
 $connected=false
 $openvpn_pid=0
+$thtail=nil
 $style_ok= <<EOF
 * { background-image:  -gtk-gradient(linear, left top, left bottom,  from(#066), to(#ACC));
     color: #FFFFFF;
@@ -65,6 +74,7 @@ if $auth.size>0
   puts "*************** Auth in code !!!! ************************"
 end
 
+############################# Tools ##############################
 
 def check_system(with_connection)
   return unless with_connection
@@ -165,17 +175,14 @@ def connect
       th0=nil
       read.expect(rusername) { log "set user..."    ; write.puts $auth.split("////")[0] }
       read.expect(rpassword) { log "set passwd..."  ; write.puts $auth.split("////")[1] }
-      read.expect(rfail) { 
-        log "NOK ???"
-        #$auth=""
-        log "kill openvpn.."; Process.kill(9,pid) rescue nil 
+      read.expect(rcompleted) {
+				log "OK !!!!"
+				gui_invoke {
+				 status_connection(true)
+				 @ltitle.text=name
+				} 
       }
-      read.expect(rcompleted,320) { #seem no work on some platform....
-        log "OK!!!!"  
-        th0.kill if th0
-	      gui_invoke { status_connection(true) } 
-       }
-      read.each { |output| p output; log "log:    "+output.chomp }
+      read.each { |o| log "log:    "+o.chomp }
     rescue Exception => e
 	    gui_invoke { status_connection(false) }
       Process.kill(9,pid)
@@ -189,7 +196,8 @@ end
 
 # tail -f on openvpn log file
 def tailmf(filename,rok,rnok) 
-  Thread.new(filename) do |fn|
+  $thtail.kill if $thtail
+  $thtail=Thread.new(filename) do |fn|
      sleep(0.1) until File.exists?(fn)
      size=( File.size(fn) rescue 0)
      loop {
@@ -237,6 +245,37 @@ def disconnect
   } 
 end
 
+def reconnect()
+ if $current.size>0 && $provider[$current] && $auth.size>0 && $auth.split("////").size==2
+   Thread.new() {  
+     disconnect()
+     log "sleep 4 seconds..."
+     sleep 4
+     log "reconnect..."
+     connect()
+   }
+ else
+   alert("Not connected !!!")
+ end
+end
+
+def speed_test()
+  alabel=[]
+  dialog_async("Speed test",{:response=> proc {|dia| $sth.kill if $sth; true }}) {
+     stack(bg:"#FFF") {
+       5.times { |i| alabel << label("",bg:"#FFF",fg:"#000") }
+     }
+  }
+  $sth=ip_speed_test(4) { |qt,delta,speed| 
+    if delta>0
+      alabel[1].text="downlolad test..."
+      alabel[3].text="Speed : #{speed.round(2)} KB/s"
+    else
+      alabel[0].text="End test"
+    end
+  }
+end
+
 at_exit { (Process.kill(9,$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
 
 
@@ -253,7 +292,9 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
      stacki do
        buttoni("Check vpn") { check_system(true) }
        buttoni("Refresh list") { Thread.new { get_list_server() } }
-       buttoni("Disconnect...") { disconnect() }
+       buttoni("Disconnect...") { Thread.new { disconnect() } }
+       buttoni("Change IP...") { reconnect() }
+       buttoni("Speed Test...") { speed_test() }
        buttoni("Forget name&pass") { $auth="" }
        bourrage
        buttoni("Exit") { exit(0) rescue nil }
