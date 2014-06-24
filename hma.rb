@@ -343,4 +343,6 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
       get_list_server
     }
   end  
+  set_icon "hme32.png"
+     
 end
