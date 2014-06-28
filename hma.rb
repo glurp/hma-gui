@@ -238,7 +238,7 @@ def log(*s)
 end
 
 def disconnect
-  if $openvpn_pid>0
+  if $openvpn_pid==0
     system("killall","openvpn")
     return
   end
