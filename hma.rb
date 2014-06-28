@@ -52,6 +52,10 @@ GtkEntry,GtkTreeView { background-image:  -gtk-gradient(linear, left top, left b
       from(#FFE), to(#EED));
     color: #000;
 }
+GtkButton, GtkButton > GtkLabel { background-image:  -gtk-gradient(linear, left top, left bottom,  
+      from(#EFF), to(#CDD));
+    color: #000;
+}
 EOF
 $style_nok= <<EOF
 * { background-image:  -gtk-gradient(linear, left top, left bottom,  from(#966), to(#FCC));
@@ -81,11 +85,16 @@ end
 
 def check_system(with_connection)
   return unless with_connection
-  vip=open("http://geoip.hidemyass.com/ip").read.chomp # truble: ip from hma is not detected with pen-uri...
+  vip=open("http://geoip.hidemyass.com/ip/",{
+    "User-Agent" => "Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:30.0) Gecko/20100101 Firefox/30.0",
+    "Host"	=> "geoip.hidemyass.com",
+    "Accept" =>	"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Cache-Control" =>	"max-age=0"
+  }).read.chomp # truble: ip from hma is not detected with open-uri...
   if vip!=$original_ip
-    gui_invoke { alert("Virtual connection ok, ip=#{vip}") }
+    gui_invoke { alert("Virtual connection ok, ip='#{vip}'") }
   else
-    gui_invoke { error("VPN connection not active !") } 
+    gui_invoke { error("VPN connection seem not active ! (ip='#{vip}')") } 
     disconnect
   end
 end
@@ -198,55 +207,14 @@ def connect
   $openvpn_pid=0
 end
 
-# tail -f on openvpn log file
-def tailmf(filename,rok,rnok) 
-  $thtail.kill if $thtail
-  $thtail=Thread.new(filename) do |fn|
-     sleep(0.1) until File.exists?(fn)
-     size=( File.size(fn) rescue 0)
-     loop {
-       File.open(fn) do |ff|
-          ff.seek(size) if size>0 && size<=File.size(fn)
-          while line=ff.gets
-             size=ff.tell
-             log(line.chomp.split(/\s+/,6)[-1]) 
-             case line
-               when rok
-                 log "OK !!!!"
-	               gui_invoke {
-                   status_connection(true)
-                 } 
-               when rnok
-                 log "AÏAÏAÏ!!!!"
-               when /Connection reset, restarting/i
-                 log "DECONNEXION !!!!"
-	               gui_invoke {
-                   status_connection(false)
-                 } 
-             end              
-             sleep 0.07
-          end
-          #log "#{fn} closed"
-       end
-       sleep 0.2
-     }
-  end
-end
-
-def log(*s)  
-  gui_invoke { log s.force_encoding("UTF-8") } 
-end
-
 def disconnect
   if $openvpn_pid==0
-    system("killall","openvpn")
+    gui_invoke { system("killall","openvpn")  if ask("Kill all 'openvpn' session ?") }
     return
   end
   Process.kill("INT",$openvpn_pid) rescue nil
   $openvpn_pid=0
-	gui_invoke {
-    status_connection(false)
-  } 
+	gui_invoke { status_connection(false) } 
 end
 
 def reconnect()

@@ -9,20 +9,21 @@ for linux ( *ix) host.
 
 based on Ruby, Gtk3, Ruiby (ruby dsl for gtk)
 
-login/password are not saved : you must edit them at each run...
+login/password are save in local file, uncryped.
+
+if call disconnect two times, second time will do a 'killall' of openvpn !
 
 Issues/TODO
 ===========
 
-* save parameters in crytpted form (?) : server provider, authentifications
 * real detection on good  connection to hma ( geoip.hidemyass.com/ip do not work 
-  with ruby open-uri)
+  with ruby open-uri, )
 * icon, colors, styles in window...
-
+* taskbarr icon animation if disconnected
 
 Usage
 =====
-> sudo ruby hma.rb &
+> gksudo ruby hma.rb &
 
 Installation
 ============
@@ -42,7 +43,7 @@ Inspirations
 
 Rewriting shellscript from hma which establish a connection, in ruby
 
-GUI: minium, functional :)
+GUI: minimum, functional :)
 
 
 

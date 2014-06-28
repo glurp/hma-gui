@@ -54,6 +54,46 @@ EOF
 end
 
 
+# tail -f on openvpn log file
+def tailmf(filename,rok,rnok) 
+  $thtail.kill if $thtail
+  $thtail=Thread.new(filename) do |fn|
+     sleep(0.1) until File.exists?(fn)
+     size=( File.size(fn) rescue 0)
+     loop {
+       File.open(fn) do |ff|
+          ff.seek(size) if size>0 && size<=File.size(fn)
+          while line=ff.gets
+             size=ff.tell
+             log(line.chomp.split(/\s+/,6)[-1]) 
+             case line
+               when rok
+                 log "OK !!!!"
+	               gui_invoke {
+                   status_connection(true)
+                 } 
+               when rnok
+                 log "AÏAÏAÏ!!!!"
+               when /Connection reset, restarting/i
+                 log "DECONNEXION !!!!"
+	               gui_invoke {
+                   status_connection(false)
+                 } 
+             end              
+             sleep 0.07
+          end
+          #log "#{fn} closed"
+       end
+       sleep 0.2
+     }
+  end
+end
+
+def log(*s)  
+  gui_invoke { log s.force_encoding("UTF-8") } 
+end
+
+
 if $0==__FILE__
   th=ip_speed_test(1) { |qt,delta,speed| puts "speed #{speed.round} KB/s" }
   sleep 30
