@@ -237,15 +237,17 @@ def speed_test()
   alabel=[]
   dialog_async("Speed test",{:response=> proc {|dia| $sth.kill if $sth; true }}) {
      stack(bg:"#FFF") {
-       5.times { |i| alabel << entry("",bg:"#FFF",fg:"#000") }
+       3.times { |i| alabel << entry("",bg:"#FFF",fg:"#000") }
      }
   }
+  alabel[0].text="Connecting..."
   $sth=ip_speed_test(4) { |qt,delta,speed| 
+    alabel[0].text=""
     if delta>0
       alabel[1].text="downlolad test..."
-      alabel[3].text="Speed : #{speed.round(2)} KB/s"
+      alabel[2].text="Speed : #{speed.round(2)} KB/s"
     else
-      alabel[0].text="End test"
+      alabel[1].text="End test"
     end
   }
 end
@@ -298,7 +300,6 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        end
      end
   end
-  set_icon "hme32.png" 
   after(50) do
     Thread.new {
        begin
@@ -314,4 +315,5 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
       get_list_server
     }
   end  
+  set_icon "hme32.png" 
 end
