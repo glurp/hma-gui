@@ -1,3 +1,6 @@
+# encoding: utf-8
+# License: LGPL V2.1
+
 require 'socket'
 require 'thread'
 require 'timeout'

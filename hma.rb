@@ -1,7 +1,10 @@
 #!/usr/bin/ruby
 # encoding: utf-8
+#
+# License: LGPL V2.1
+#
 #######################################################################
-#   hma.rb : GUI for manage VPN connection do hma network
+#   hma.rb : GUI for manage VPN connection to hma network
 #  Usage:
 #    > sudo apt-get install openvpn
 #     <<< install ruby 1.9.3 minimum >>>
@@ -75,27 +78,25 @@ EOF
 
 $auth=""
 if $auth.size>0 
-  puts "*************** Auth in code !!!! ************************"
+  puts "*************** Auth in code !!!! Do not commit !!! ************************"
 end
 if File.exists?("client.cred")  
   $auth=File.read("client.cred")
 end 
 
 ############################# Tools ##############################
-
 def check_system(with_connection)
   return unless with_connection
-  vip=open("http://geoip.hidemyass.com/ip/",{
-    "User-Agent" => "Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:30.0) Gecko/20100101 Firefox/30.0",
-    "Host"	=> "geoip.hidemyass.com",
-    "Accept" =>	"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Cache-Control" =>	"max-age=0"
-  }).read.chomp # truble: ip from hma is not detected with open-uri...
-  if vip!=$original_ip
-    gui_invoke { alert("Virtual connection ok, ip='#{vip}'") }
+  data=open("http://geoip.hidemyass.com").read.chomp
+  if (data=~ /<table>(.*?)<\/table>/m)
+    props=$1.gsub(/\s+/,"").
+            split(/<\/*tr>/).select {|s| s && s.size>0}.
+            each_with_object({}) { |r,h| 
+              k,v=r.split("</td><td>").map {|c| ;c.gsub(/<.*?>/,"")}
+              h[k]=v if k && v
+            }
+    alert("Your connection is :\n #{props.map {|kv| "%-10s : %10s" % kv}.join("\n")}")
   else
-    gui_invoke { error("VPN connection seem not active ! (ip='#{vip}')") } 
-    disconnect
   end
 end
 
@@ -162,6 +163,7 @@ def connect
   log "serveur  #{$current}"
   log "get openvpn cfg template from securenetconnection.com..." 
   tpl_uri="https://securenetconnection.com/vpnconfig/openvpn-template.ovpn"
+  log "...get openvpn cfg template ok"
   template=open(tpl_uri).read.split(/\r?\n/)
   template <<  "remote #{ip} #{port}" 
   template <<  "proto #{proto}" 
@@ -235,7 +237,7 @@ def speed_test()
   alabel=[]
   dialog_async("Speed test",{:response=> proc {|dia| $sth.kill if $sth; true }}) {
      stack(bg:"#FFF") {
-       5.times { |i| alabel << label("",bg:"#FFF",fg:"#000") }
+       5.times { |i| alabel << entry("",bg:"#FFF",fg:"#000") }
      }
   }
   $sth=ip_speed_test(4) { |qt,delta,speed| 
@@ -255,7 +257,7 @@ at_exit { (Process.kill("TERM",$openvpn_pid) rescue nil; $openvpn_pid=0) if $ope
 ###########################################################################
 
 Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
-  rposition(10,10)
+  rposition(1,1)
   def status_connection(state)
     $connected=state
     def_style state ? $style_ok : $style_nok 
@@ -296,6 +298,7 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        end
      end
   end
+  set_icon "hme32.png" 
   after(50) do
     Thread.new {
        begin
@@ -311,6 +314,4 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
       get_list_server
     }
   end  
-  set_icon "hme32.png"
-     
 end

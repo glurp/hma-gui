@@ -38,13 +38,16 @@ Install openvpn, ruby, and some ruby extentions :
     > sudo ruby hma.rb &
 ```
 
-Inspirations
+Conception
 ============
 
 Rewriting shellscript from hma which establish a connection, in ruby
 
 GUI: minimum, functional :)
 
+License
+=======
+LGPL V21
 
 
 
