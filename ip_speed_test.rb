@@ -25,17 +25,21 @@ Connection: close
 EOF
     header.gsub!(/\n/,"\r\n")
     puts header
-	  timeout(12000) {
+    gs=0
+    ts=Time.now
+	  timeout(24) {
 		  s = TCPSocket.open(host, 80) 
       s.sync=true
       s.print header
       content=s.recv(1)
+      ts=Time.now
 		  ss=0
       start=Time.now.to_f
 		  loop  do
         content=s.recv(1024)
         break unless content && content.size>0
 			  ss+=content.size
+			  gs+=content.size
         now=Time.now.to_f
         if (now-start)>dt
           speed=ss/(1024*(now-start))
@@ -50,8 +54,8 @@ EOF
 		  end
 		  s.close
 	  } rescue puts "Error #{$!}"
-    if block_given?
-      yield(0,0,0) 
+    if block
+      block.call((gs/(1024*1024.0)).round(2),0,gs/(1024*(Time.now.to_f-ts.to_f))) 
     end
   end 
 end

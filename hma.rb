@@ -85,6 +85,10 @@ if File.exists?("client.cred")
 end 
 
 ############################# Tools ##############################
+
+def proc_presence?(name)   `pgrep -lf #{name}`.split("\n").size>0 end
+def presence_openvpn?()   proc_presence?("openvpn") end
+
 def check_system(with_connection)
   return unless with_connection
   data=open("http://geoip.hidemyass.com").read.chomp
@@ -95,7 +99,8 @@ def check_system(with_connection)
               k,v=r.split("</td><td>").map {|c| ;c.gsub(/<.*?>/,"")}
               h[k]=v if k && v
             }
-    alert("Your connection is :\n #{props.map {|kv| "%-10s : %10s" % kv}.join("\n")}")
+     contents=props.map {|kv| '%-10s : %10s' % kv }.join("\n")
+    alert("Your connection is :\n #{contents}" )
   else
   end
 end
@@ -104,21 +109,21 @@ def get_list_server()
   gui_invoke { @lprovider.clear ; @lprovider.add_item("get server list from hma...") }
   iplist="https://securenetconnection.com/vpnconfig/servers-cli.php"
   begin
-	  open(iplist) do |body|
+    open(iplist) do |body|
       gui_invoke { @lprovider.add_item("server reached...") }
       $provider={}
-		  list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
+      list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
         ip,name,co,tcp,udp=line.chomp.split('|')
         $provider[name]={ip: ip,tcp: tcp,udp: udp}
         name
       }
-		  gui_invoke {
-			  @lprovider.clear
-			  list.sort.each_with_index { |item,i| @lprovider.add_item(item) ; update if i%10==1}
-		  }
+      gui_invoke {
+        @lprovider.clear
+        list.sort.each_with_index { |item,i| @lprovider.add_item(item) ; update if i%10==1}
+      }
     end
   rescue Exception => e
-		  gui_invoke { error("Error getting HMA server list : #{e} \n on #{iplist}")}
+      gui_invoke { error("Error getting HMA server list : #{e} \n on #{iplist}")}
   end
 end
 
@@ -129,9 +134,9 @@ def choose_provider(item)
   if $auth==""
       user,pass="",""
       loop {
-		    prompt("Hma client User Name ?") {|p| user=p }.run  
+        prompt("Hma client User Name ?") {|p| user=p }.run  
         return if user.size==0
-		    prompt("Hma client Passwd ?") {|p| pass=p }.run
+        prompt("Hma client Passwd ?") {|p| pass=p }.run
         break if user.size>2 && pass.size>2
         error("Error, redone...")
       }
@@ -143,9 +148,9 @@ def choose_provider(item)
   if  $connected
     if ask("Kill current active vpn ?")
       disconnect
-		else
-			return
-		end
+    else
+      return
+    end
   end
   Thread.new { connect }
 end
@@ -191,16 +196,16 @@ def connect
       read.expect(rusername) { log "set user..."    ; write.puts $auth.split("////")[0] }
       read.expect(rpassword) { log "set passwd..."  ; write.puts $auth.split("////")[1] }
       read.expect(rcompleted) {
-				log "OK !!!!"
-				gui_invoke {
-				 status_connection(true)
-				 @ltitle.text=name
-				} 
+        log "OK !!!!"
+        gui_invoke {
+         status_connection(true)
+         @ltitle.text=name
+        } 
       }
       read.each { |o| log "log:    "+o.chomp }
     rescue Exception => e
-	    gui_invoke { status_connection(false) }
-      Process.kill(9,pid)
+      gui_invoke { status_connection(false) }
+      Process.kill("KILL",pid)
       log "openvpn Exception #{e} #{"  "+e.backtrace.join("\n  ")}"
     ensure
       th.kill rescue nil
@@ -210,13 +215,9 @@ def connect
 end
 
 def disconnect
-  if $openvpn_pid==0
-    gui_invoke { system("killall","openvpn")  if ask("Kill all 'openvpn' session ?") }
-    return
-  end
-  Process.kill("INT",$openvpn_pid) rescue nil
+  system("killall","openvpn")  
+  gui_invoke { status_connection(false) }
   $openvpn_pid=0
-	gui_invoke { status_connection(false) } 
 end
 
 def reconnect()
@@ -242,17 +243,19 @@ def speed_test()
   }
   alabel[0].text="Connecting..."
   $sth=ip_speed_test(4) { |qt,delta,speed| 
-    alabel[0].text=""
+    alabel[0].text="download iso ubuntu..."
     if delta>0
       alabel[1].text="downlolad test..."
       alabel[2].text="Speed : #{speed.round(2)} KB/s"
     else
-      alabel[1].text="End test"
+      alabel[0].text="End test"
+      alabel[1].text="Data received: #{qt} MB"
+      alabel[2].text="Global Speed : #{speed.round(2)} KB/s"
     end
   }
 end
 
-at_exit { (Process.kill("TERM",$openvpn_pid) rescue nil; $openvpn_pid=0) if $openvpn_pid>0 }
+at_exit { disconnect if $openvpn_pid>0 }
 
 ###########################################################################
 #               M A I N    W I N D O W
@@ -283,20 +286,20 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        flowi do
           @ltitle=label("VPN Connection Manager",{
             font: "Arial bold 16",bg: "#004455", fg: "#AAAAAA"
-					})
-	 			  @status=stacki { labeli("#DIALOG_ERROR") }
-	 			  $connected=false
+          })
+           @status=stacki { labeli("#DIALOG_ERROR") }
+           $connected=false
        end
-			 separator
+       separator
        stack do
          @lprovider=list("Providers:",200,200) { |item| 
-						@pvc.text=@lprovider.get_data[item.first] rescue nil
-				 }
+            @pvc.text=@lprovider.get_data[item.first] rescue nil
+         }
          @lprovider.add_item("Loading...")
          flowi { 
            @pvc=entry("...",width:200)
-					 button("Connect...") { choose_provider(@pvc.text) if @pvc.text.size>3 }
-				 }
+           button("Connect...") { choose_provider(@pvc.text) if @pvc.text.size>3 }
+         }
        end
      end
   end
