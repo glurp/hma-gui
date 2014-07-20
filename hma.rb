@@ -306,7 +306,6 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
          puts "get public ip..."
          $original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
          puts "public is ip=#{$original_ip}"
-         gui_invoke {alert("Public ip is #{$original_ip}") }
        rescue 
          $original_ip=""
          gui_invoke {error("Internet seem unreachable !") }
