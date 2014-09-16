@@ -303,13 +303,13 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        end
      end
   end
+  ############### initial traitments
   after(50) do
     Thread.new {
        begin
          puts "get public ip..."
          $original_ip=open("http://geoip.hidemyass.com/ip").read.chomp
          puts "public is ip=#{$original_ip}"
-         gui_invoke {alert("Public ip is #{$original_ip}") }
        rescue 
          $original_ip=""
          gui_invoke {error("Internet seem unreachable !") }
@@ -319,4 +319,9 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
     }
   end  
   set_icon "hme32.png" 
+  ############### icon animation
+  anim(1000) {
+    set_icon($openvpn_pid==0 ? ( (Time.now.to_i%2==0)? "hme32.png" : "hme32b.png" ) : "hme32.png" )
+  }
+
 end
