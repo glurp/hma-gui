@@ -3,13 +3,11 @@ HMA-GUI
 
 
 Gtk application for manage client connexion to VPN server.
-Curently, connection gor HMA end IPVanish are supported.
+Curently, connection to HMA and IPVanish are supported.
 
 based on Ruby, Gtk3, Ruiby (ruby dsl for gtk)
 
 login/password are save in local file, uncryped.
-
-if call disconnect two times, second time will do a 'killall' of openvpn !
 
 Usage
 =====
@@ -31,7 +29,7 @@ Install openvpn, ruby, and some ruby extentions :
 
 License
 =======
-LGPL V21
+LGPL V2.1
 
 
 
