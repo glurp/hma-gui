@@ -8,6 +8,13 @@ Curently, connection to HMA and IPVanish are supported.
 based on Ruby, Gtk3, Ruiby (ruby dsl for gtk)
 
 login/password are save in local file, uncryped.
+Features are :
+* load list server from hma or ipvanish
+* let user choose one server
+* connect/disconnect
+* check if connection is realy on vpn (http geoip.com)
+* speed test (download a big iso file from public repo)
+* memorise login/password, forget memorisation
 
 Usage
 =====
