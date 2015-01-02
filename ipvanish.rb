@@ -4,14 +4,17 @@
 # License: LGPL V2.1
 #
 #######################################################################
-#   hma.rb : GUI for manage VPN connection to hma network
+#   ipvanish.rb : GUI for manage VPN connection to IPVanish networkon Linux
 #  Usage:
 #    > sudo apt-get install openvpn
 #     <<< install ruby 1.9.3 minimum >>>
-#    > sudo gem install pty expect
+#    > sudo gem install pty expect rubyzip
 #    > sudo gem install Ruiby
+#    > mkdir ipvanish; ce ipvanish
+#    > wget wget http://www.ipvanish.com/software/configs
+#    > cd ...
 #    >
-#    > sudo ruby hma.rb &
+#    > sudo ruby ipvanish.rb &
 #######################################################################
 
 ##################### Check machine envirronent #############" 
@@ -20,12 +23,12 @@ if `which openvpn`.size==0
    exit
 end
 if !Dir.exists?("/etc") && !Dir.exists?("/user")
-   puts "Please, run mme on i Unix/Bsd/Linux machine...."
+   puts "Please, run me on i Unix/Bsd/Linux machine...."
    exit
 end
 (puts "Must be root/sudo ! ";exit(1)) unless Process.uid==0 
 
-##################""" Load ruby gem dependancy #################
+################## Load ruby gem dependancy #################
 def trequire(pack) 
    require pack
 rescue Exception  => e
@@ -33,11 +36,12 @@ rescue Exception  => e
    exit
 end
 
-require 'open-uri'
-require 'open3'
+trequire 'open-uri'
+trequire 'open3'
 trequire 'Ruiby'
 trequire 'pty'
 trequire 'expect'
+trequire 'zip'
 require_relative 'ip_speed_test.rb'
 
 ################################ Global state ##################
@@ -80,8 +84,8 @@ $auth=""
 if $auth.size>0 
   puts "*************** Auth in code !!!! Do not commit !!! ************************"
 end
-if File.exists?("client.cred")  
-  $auth=File.read("client.cred")
+if File.exists?("ipvanish.cred")  
+  $auth=File.read("ipvanish.cred")
 end 
 
 ############################# Tools ##############################
@@ -106,42 +110,62 @@ def check_system(with_connection)
 end
 
 def get_list_server()
-  gui_invoke { @lprovider.clear ; @lprovider.add_item("get server list from hma...") }
-  iplist="https://securenetconnection.com/vpnconfig/servers-cli.php"
+  gui_invoke { @lprovider.clear ; @lprovider.add_item("get server list...") }
   begin
-    open(iplist) do |body|
-      gui_invoke { @lprovider.add_item("server reached...") }
-      $provider={}
-      list=body.read.each_line.reject {|a| a=~ /USA|UK|Canada|France|Germany/i }.map {|line|
-        ip,name,co,tcp,udp=line.chomp.split('|')
-        $provider[name]={ip: ip,tcp: tcp,udp: udp}
-        name
-      }
-      gui_invoke {
-        @lprovider.clear
-        list.sort.each_with_index { |item,i| @lprovider.add_item(item) ; update if i%10==1}
-      }
+    gui_invoke { @lprovider.add_item("download ovpn & crt files...") }
+    Dir.mkdir("ipvanish") unless Dir.exists?("ipvanish")
+    zipfn="ipvanish/a.zip"
+    File.open(zipfn,"wb") { |f| 
+      data=open("http://www.ipvanish.com/software/configs/configs.zip").read
+      p data.size,data.encoding
+      f.write(data)
+    }
+    lfn= []
+    flog="/tmp/openvpn_ipvanish.log"
+    Zip::File.open(zipfn) do |zip_file|
+      zip_file.each do |entry|
+        puts "  Extracting #{entry.name}..."
+        fn="ipvanish/#{entry.name}"
+        File.delete(fn) if File.exists?(fn)
+        entry.extract(fn)
+        File.write(fn,File.read(fn)+ "\nlog-append #{flog}\n") 
+        lfn << entry.name if entry.name =~ /.ovpn$/
+        if entry.name =~ /^ca.*.crt$/
+          File.delete(entry.name) if File.exists?(entry.name)
+          entry.extract(entry.name) 
+        end
+      end
     end
+    puts "loading list server (#{lfn.size})..."
+    gui_invoke { @lprovider.add_item("loading list server (#{lfn.size})...") }
+    lfn.sort.each { |name|
+      _,country,town,abrev,srv=*name.split(/[\-\.]/)[0..-2]
+      $provider["%s %-15s %s" % [country,town,srv]]=name
+    }
+    gui_invoke {
+      @lprovider.clear
+      $provider.keys.sort.each_with_index { |item,i| @lprovider.add_item(item) ; update if i%10==1}
+    }
   rescue Exception => e
-      gui_invoke { error("Error getting HMA server list : #{e} \n on #{iplist}")}
+      gui_invoke { error("Error getting server list : #{e}")}
   end
 end
 
 def choose_provider(item)
-  ok=Message.ask("Connect to Provider \n '#{item}' \n @ip #{$provider[item][:ip]} ?")
+  ok=Message.ask("Connect to Provider \n '#{item}' \n @ip #{$provider[item]} ?")
   return unless ok
 
   if $auth==""
       user,pass="",""
       loop {
-        prompt("Hma client User Name ?") {|p| user=p }.run  
+        prompt("Vpn User Name ?") {|p| user=p }.run  
         return if user.size==0
-        prompt("Hma client Passwd ?") {|p| pass=p }.run
+        prompt("Vpn Passwd ?") {|p| pass=p }.run
         break if user.size>2 && pass.size>2
         error("Error, redone...")
       }
       $auth=user+"////"+pass; user="";pass=""
-      File.write("client.cred",$auth) 
+      File.write("ipvanish.cred",$auth) 
   end
 
   $current=item
@@ -158,27 +182,10 @@ end
 def connect
   log "connect: to #{$current} with: #{$provider[$current]}"
   return unless $current.size>0 && $provider[$current] && $provider[$current].size>=3
-  props=$provider[$current]
-  ip=props[:ip]
-  proto= props[:tcp]=="TCP" ? "tcp" : "udp"
-  port =  (proto == "tcp") ? 443 :  53  
-  flog="/tmp/openvpn_hma.log"
-  log "proto #{proto}"
-  log "ip  #{ip}"
-  log "serveur  #{$current}"
-  log "get openvpn cfg template from securenetconnection.com..." 
-  tpl_uri="https://securenetconnection.com/vpnconfig/openvpn-template.ovpn"
-  log "...get openvpn cfg template ok"
-  template=open(tpl_uri).read.split(/\r?\n/)
-  template <<  "remote #{ip} #{port}" 
-  template <<  "proto #{proto}" 
-  template <<  "log-append #{flog}" 
-  template <<  "" 
-
-  log "create .cfg file (#{template.size} lines)"
-  File.write("/tmp/hma-config.cfg",template.join("\n"))
+  ovpn=$provider[$current]
   log "run openvpn..."
-  openvpn($current,"/tmp/hma-config.cfg",flog)
+  flog="/tmp/openvpn_ipvanish.log"
+  openvpn($current,"ipvanish/#{ovpn}",flog)
  end
 
  def openvpn(name,cfg,flog)
@@ -262,7 +269,7 @@ at_exit { disconnect if $openvpn_pid>0 }
 #               M A I N    W I N D O W
 ###########################################################################
 
-Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
+Ruiby.app width: 500,height: 400,title: "IPVanish VPN Connection" do
   rposition(1,1)
   def status_connection(state)
     $connected=state
@@ -278,7 +285,7 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
        buttoni("Disconnect...") { Thread.new { disconnect() } }
        buttoni("Change IP...") { reconnect() }
        buttoni("Speed Test...") { speed_test() }
-       buttoni("Forget name&pass") { $auth=""; File.delete("client.cred") }
+       buttoni("Forget name&pass") { $auth=""; File.delete("ipvanish.cred") }
        bourrage
        buttoni("Exit") { ruiby_exit()  }
      end
@@ -319,10 +326,9 @@ Ruiby.app width: 500,height: 400,title: "HMA VPN Connection" do
       get_list_server
     }
   end  
-  set_icon "hme32.png" 
+  set_icon "ipvanish.png" 
   ############### icon animation
   anim(1000) {
-    set_icon($openvpn_pid==0 ? ( (Time.now.to_i%2==0)? "hme32.png" : "hme32b.png" ) : "hme32.png" )
+    set_icon($openvpn_pid==0 ? ( (Time.now.to_i%2==0)? "ipvanish_down.png" : "ipvanish_down.png" ) : "ipvanish.png" )
   }
-
 end
