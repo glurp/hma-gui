@@ -140,6 +140,7 @@ def get_list_server()
     gui_invoke { @lprovider.add_item("loading list server (#{lfn.size})...") }
     lfn.sort.each { |name|
       _,country,town,abrev,srv=*name.split(/[\-\.]/)[0..-2]
+      p  [country,town,srv,name]
       $provider["%s %-15s %s" % [country,town,srv]]=name
     }
     gui_invoke {
@@ -251,7 +252,7 @@ def speed_test()
   }
   alabel[0].text="Connecting..."
   $sth=ip_speed_test(4) { |qt,delta,speed| 
-    alabel[0].text="download iso ubuntu..."
+    alabel[0].text="download ..."
     if delta>0
       alabel[1].text="downlolad test..."
       alabel[2].text="Speed : #{speed.round(2)} KB/s"

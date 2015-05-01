@@ -8,18 +8,20 @@ require 'timeout'
 
 
 def ip_speed_test(dt,&block)
+  load(__FILE__)
   Thread.new do
-    # http://releases.ubuntu.com/releases/14.04/ubuntu-14.04-desktop-i386.iso
-    iso="ubuntu-14.04-desktop-i386.iso"
-    host="releases.ubuntu.com"
+    # http://download.thinkbroadband.com/512MB.zip
+    # http://releases.ubuntu.com/releases/vivid/ubuntu-15.04-desktop-i386.iso
+    iso="512MB.zip"
+    path=""
+    host="download.thinkbroadband.com"
     uri="http://#{host}"
-    path="/releases/14.04"
     url="#{uri}#{path}/#{iso}"
-
+    #gui_invoke { alert(url) }
     header= <<EOF
-GET #{url} HTTP/1.0
+GET #{path}/#{iso} HTTP/1.0
 User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:30.0) Gecko/20100101 Firefox/30.0
-Host: iso.linuxquestions.org
+Host: #{host}
 Connection: close
 
 EOF
@@ -80,7 +82,7 @@ def tailmf(filename,rok,rnok)
                    status_connection(true)
                  } 
                when rnok
-                 log "AÏAÏAÏ!!!!"
+                 log "AiiAiiAii !!!!"
                when /Connection reset, restarting/i
                  log "DECONNEXION !!!!"
 	               gui_invoke {
