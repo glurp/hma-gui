@@ -11,7 +11,6 @@ def ip_speed_test(dt,&block)
   load(__FILE__)
   Thread.new do
     # http://download.thinkbroadband.com/512MB.zip
-    # http://releases.ubuntu.com/releases/vivid/ubuntu-15.04-desktop-i386.iso
     iso="512MB.zip"
     path=""
     host="download.thinkbroadband.com"
@@ -29,7 +28,7 @@ EOF
     puts header
     gs=0
     ts=Time.now
-	  timeout(24) {
+	  timeout(240) {
 		  s = TCPSocket.open(host, 80) 
       s.sync=true
       s.print header
@@ -56,6 +55,7 @@ EOF
 		  end
 		  s.close
 	  } rescue puts "Error #{$!}"
+    s.close rescue nil
     if block
       block.call((gs/(1024*1024.0)).round(2),0,gs/(1024*(Time.now.to_f-ts.to_f))) 
     end
